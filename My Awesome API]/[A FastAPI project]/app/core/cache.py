@@ -1,7 +1,6 @@
-import os
 from typing import Optional
 
-redis_url = os.environ.get("REDIS_URL")
+from app.core.config import get_settings
 
 _redis = None
 
@@ -11,6 +10,7 @@ def get_redis():
     global _redis
     if _redis is not None:
         return _redis
+    redis_url = get_settings().redis_url
     if not redis_url:
         return None
     try:

@@ -1,14 +1,32 @@
 import logging
 import asyncio
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .core.config import get_settings
 from .core.db import create_tables
 from .core.settings import AI_PROVIDER
 from .services.ai_client import cache_get, cache_set
 
+settings = get_settings()
+
 logger = logging.getLogger("saas_app")
 
-app = FastAPI(title="SaaS Reporting AI - Modular")
+app = FastAPI(title=settings.app_name)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+allowed_origins = settings.cors_origins or ["http://localhost:3000"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+)
+
+if settings.trusted_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 
 # Global HF pipeline placeholder
 HF_LOCAL_PIPELINE = None

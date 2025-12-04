@@ -1,11 +1,15 @@
 from fastapi import APIRouter
 
 from . import upload, explain, status, forecast, metrics, report, sales
+from app.api import auth
 
 router = APIRouter()
 
 # Health & Status
 router.include_router(status.router, prefix="", tags=["status"])
+
+# Auth endpoints
+router.include_router(auth.router, prefix="/api", tags=["auth"])
 
 # Core endpoints
 router.include_router(upload.router, prefix="", tags=["upload"])

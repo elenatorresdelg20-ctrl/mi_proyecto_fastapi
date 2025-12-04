@@ -1,12 +1,13 @@
-import os
 from typing import Tuple
 
 from fastapi import HTTPException
 
 from .cache import get_redis
+from .config import get_settings
 
-RATE_LIMIT = int(os.environ.get("RATE_LIMIT", "10"))
-RATE_PERIOD = int(os.environ.get("RATE_LIMIT_PERIOD", "60"))
+settings = get_settings()
+RATE_LIMIT = settings.rate_limit
+RATE_PERIOD = settings.rate_limit_period
 
 
 def check_rate(tenant_code: str, ip: str) -> Tuple[bool, int, int]:
