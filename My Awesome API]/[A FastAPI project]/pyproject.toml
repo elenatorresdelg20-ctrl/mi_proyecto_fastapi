@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my_awesome_api"
+version = "0.0.0"
+description = "My Awesome API packaged for editable install"
+authors = [{name = "elena"}]
+
+[tool.setuptools]
+packages = ["app"]

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install system deps and pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Generate FERNET_KEY
+        run: |
+          echo "FERNET_KEY=$(python - <<'PY'
+from cryptography.fernet import Fernet
+print(Fernet.generate_key().decode())
+PY
+)" >> $GITHUB_ENV
+
+      - name: Install requirements
+        run: |
+          pip install -r './My Awesome API]/requirements.txt'
+
+      - name: Install project editable
+        working-directory: './My Awesome API]/[A FastAPI project'
+        run: |
+          pip install -e .
+
+      - name: Alembic upgrade
+        working-directory: './My Awesome API]/[A FastAPI project'
+        env:
+          FERNET_KEY: ${{ env.FERNET_KEY }}
+        run: |
+          alembic upgrade head
+
+      - name: Run tests
+        working-directory: './My Awesome API]/[A FastAPI project'
+        env:
+          FERNET_KEY: ${{ env.FERNET_KEY }}
+        run: |
+          pytest -q
