@@ -1,16 +1,8 @@
-from datetime import datetime
+"""Tenant model re-exported from the consolidated models module.
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+This keeps backward compatibility for legacy imports while ensuring all
+entities share the same SQLAlchemy Base and metadata.
+"""
+from app.models.models import Tenant
 
-from app.core.database import Base
-
-class Tenant(Base):
-    __tablename__ = "tenants"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    code = Column(String, unique=True, index=True, nullable=False)
-    is_active = Column(Boolean, default=True)
-    api_key = Column(String, nullable=False, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    logo_url = Column(String, nullable=True)
-    primary_color = Column(String, nullable=True)
+__all__ = ["Tenant"]

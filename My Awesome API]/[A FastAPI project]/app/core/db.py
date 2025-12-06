@@ -17,5 +17,15 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 def create_tables():
+    """Create all tables registered on the shared Base.
+
+    Importing the models inside this function ensures that metadata is
+    populated before attempting to create the tables, preventing silent
+    no-op creations when the app starts without prior imports.
+    """
+    from app import models  # noqa: F401 ensures model modules are registered
+    from app.models import models as model_definitions  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
