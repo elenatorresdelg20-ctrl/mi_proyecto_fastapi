@@ -122,7 +122,6 @@ def generate_pptx_report(tenant_code: str, payload):
     def _escape_xml(text: str) -> str:
         return (
             str(text)
-            .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         )

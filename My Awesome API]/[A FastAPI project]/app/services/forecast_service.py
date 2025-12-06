@@ -10,7 +10,7 @@ Métodos:
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -28,7 +28,7 @@ from app.schemas.forecast import (
 
 def _get_daily_sales(db: Session, tenant_id: int, days: int = 90) -> Dict[str, float]:
     """Obtiene ventas diarias agregadas para los últimos N días."""
-    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_date = datetime.min
     
     results = db.query(
         func.date(Sale.date).label("day"),
@@ -46,7 +46,7 @@ def _get_daily_sales(db: Session, tenant_id: int, days: int = 90) -> Dict[str, f
 
 def _get_sales_by_product(db: Session, tenant_id: int, days: int = 90) -> Dict[str, Dict]:
     """Obtiene análisis de ventas por producto."""
-    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_date = datetime.min
     
     results = db.query(
         Sale.product,
@@ -76,7 +76,7 @@ def _get_sales_by_product(db: Session, tenant_id: int, days: int = 90) -> Dict[s
 
 def _get_sales_by_channel(db: Session, tenant_id: int, days: int = 90) -> Dict[str, Dict]:
     """Obtiene análisis de ventas por canal."""
-    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_date = datetime.min
     
     results = db.query(
         Sale.channel,
@@ -106,7 +106,7 @@ def _get_sales_by_channel(db: Session, tenant_id: int, days: int = 90) -> Dict[s
 
 def _calculate_seasonality(db: Session, tenant_id: int, days: int = 90) -> Dict[str, float]:
     """Calcula factores de seasonalidad por día de semana."""
-    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_date = datetime.min
     
     sales = db.query(Sale).filter(
         Sale.tenant_id == tenant_id,
