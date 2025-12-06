@@ -16,6 +16,10 @@ def calculate_kpis(
     start: Optional[date] = None,
     end: Optional[date] = None,
     cost_ratio: float = 0.65,
+    product: Optional[str] = None,
+    channel: Optional[str] = None,
+    min_amount: Optional[float] = None,
+    max_amount: Optional[float] = None,
     db: Optional[Session] = None,
 ) -> Optional[KPIs]:
     """Calcula KPIs clave para un tenant.
@@ -49,14 +53,25 @@ def calculate_kpis(
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
 
-        transacciones, ventas = session.query(
-            func.count(Sale.id),
-            func.coalesce(func.sum(Sale.amount), 0.0),
-        ).filter(
+        filters = [
             Sale.tenant_id == tenant.id,
             Sale.date >= start_dt,
             Sale.date < end_dt,
-        ).one()
+        ]
+
+        if product:
+            filters.append(Sale.product == product)
+        if channel:
+            filters.append(Sale.channel == channel)
+        if min_amount is not None:
+            filters.append(Sale.amount >= min_amount)
+        if max_amount is not None:
+            filters.append(Sale.amount <= max_amount)
+
+        transacciones, ventas = session.query(
+            func.count(Sale.id),
+            func.coalesce(func.sum(Sale.amount), 0.0),
+        ).filter(*filters).one()
 
         ventas = float(ventas or 0.0)
         transacciones = int(transacciones or 0)

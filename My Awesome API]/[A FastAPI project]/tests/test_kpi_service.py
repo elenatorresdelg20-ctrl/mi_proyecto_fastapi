@@ -52,3 +52,36 @@ def test_calculate_kpis_invalid_range():
 
     with pytest.raises(ValueError):
         calculate_kpis("t2", start=date(2025, 2, 1), end=date(2025, 1, 1), db=db)
+
+
+def test_calculate_kpis_with_filters():
+    db = _get_session()
+    tenant = Tenant(name="Tenant KPI", code="t3")
+    db.add(tenant)
+    db.commit()
+    db.refresh(tenant)
+
+    base_date = datetime(2025, 3, 1)
+    db.add_all(
+        [
+            Sale(tenant_id=tenant.id, amount=120.0, product="A", channel="web", date=base_date),
+            Sale(tenant_id=tenant.id, amount=250.0, product="B", channel="store", date=base_date),
+            Sale(tenant_id=tenant.id, amount=80.0, product="A", channel="store", date=base_date),
+        ]
+    )
+    db.commit()
+
+    kpis = calculate_kpis(
+        "t3",
+        start=date(2025, 3, 1),
+        end=date(2025, 3, 2),
+        product="A",
+        channel="store",
+        min_amount=50,
+        max_amount=150,
+        db=db,
+    )
+
+    assert kpis is not None
+    assert kpis.ventas == 80.0
+    assert kpis.transacciones == 1

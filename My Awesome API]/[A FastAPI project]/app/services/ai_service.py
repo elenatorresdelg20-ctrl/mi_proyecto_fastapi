@@ -110,6 +110,60 @@ def _build_ai_response(tenant_code: str, payload: Any) -> Dict[str, Any]:
     }
 
 
+def _infer_causal_drivers(kpis: Dict[str, Any], sentiment: Dict[str, Any], inventory: Dict[str, Any]):
+    drivers: List[str] = []
+
+    if kpis.get("ventas", 0) <= 0:
+        drivers.append("Baja base de ventas limita cualquier impulso de crecimiento.")
+    if kpis.get("margen", 0) < (kpis.get("ventas", 0) * 0.25):
+        drivers.append("El margen luce ajustado; costos o descuentos altos podrían ser la causa.")
+    if sentiment.get("avg_polarity", 0) < -0.1:
+        drivers.append("Percepción negativa de clientes presiona la demanda y la recompra.")
+
+    inventory_alerts = (inventory or {}).get("summary", {}).get("alerts", 0)
+    if inventory_alerts:
+        drivers.append("Alertas de reposición en almacén pueden estar generando quiebres de stock.")
+
+    movements = (inventory or {}).get("movements", [])
+    if movements and len(movements) > 2:
+        last = movements[-1]
+        prev = movements[-2]
+        if last["units"] < prev["units"]:
+            drivers.append("Se observa desaceleración reciente en movimientos de inventario.")
+
+    return drivers or ["Sin señales de causalidad fuertes; continuar monitoreando."]
+
+
+def get_causal_analysis(tenant_code: str, payload: Any) -> Dict[str, Any]:
+    kpis = payload.get("kpis", {}) if isinstance(payload, dict) else {}
+    sentiment = payload.get("sentiment", {}) if isinstance(payload, dict) else {}
+    inventory = payload.get("inventory", {}) if isinstance(payload, dict) else {}
+
+    base_response = _build_ai_response(tenant_code, payload)
+    drivers = _infer_causal_drivers(kpis, sentiment, inventory)
+
+    recomendacion_extra = ""
+    if inventory.get("summary", {}).get("alerts"):
+        recomendacion_extra = "Ajusta resurtidos priorizando fast-movers y optimiza cobertura."\
+            " Refuerza relación con proveedores para reducir tiempos."  # noqa: E501
+
+    base_response.update(
+        {
+            "drivers": drivers,
+            "dashboard": {
+                "kpis": kpis,
+                "sentiment": sentiment,
+                "inventory": inventory,
+            },
+        }
+    )
+
+    if recomendacion_extra:
+        base_response["recomendacion"] = f"{base_response['recomendacion']} {recomendacion_extra}".strip()
+
+    return base_response
+
+
 async def get_explanation(tenant_code: str, payload):
     """Obtiene explicación, usando cache Redis si está disponible.
 
