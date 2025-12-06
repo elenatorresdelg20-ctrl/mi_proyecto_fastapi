@@ -3,29 +3,21 @@ from sqlalchemy.orm import Session
 import io
 import pandas as pd
 
+from app.dependencies.tenant import get_db, verify_tenant_api_key
 from app.schemas.upload import UploadResponse
-from app.core.db import SessionLocal
 from app.utils.helpers import normalize_column_names, detect_column_mapping
 from app.services.sales import bulk_insert_sales_chunked
-from app.models.models import Tenant
 
 router = APIRouter()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.post("/upload_sales/{tenant_code}", response_model=UploadResponse)
-async def upload_sales_csv(tenant_code: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    tenant = db.query(Tenant).filter(Tenant.code == tenant_code).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant no encontrado")
-
+async def upload_sales_csv(
+    tenant_code: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    tenant=Depends(verify_tenant_api_key),
+):
     try:
         content = await file.read()
         df = pd.read_csv(io.BytesIO(content))

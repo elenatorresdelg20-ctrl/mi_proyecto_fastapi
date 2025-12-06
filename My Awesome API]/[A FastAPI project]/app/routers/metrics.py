@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from sqlalchemy.orm import Session
 
 from app.core.cache import cache_get
-from app.core.db import SessionLocal
+from app.dependencies.tenant import get_db, verify_tenant_api_key
 from app.schemas.inventory import InventoryDashboard
 from app.schemas.kpis import KPIs
 from app.services.ai_service import get_causal_analysis
@@ -12,14 +12,6 @@ from app.services.kpi_service import calculate_kpis
 from app.services.sentiment_service import get_sentiment_summary
 
 router = APIRouter()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.get("/metrics/kpis/{tenant_code}", response_model=KPIs)
@@ -33,6 +25,7 @@ def get_kpis(
     min_amount: float | None = Query(None, description="Monto mínimo"),
     max_amount: float | None = Query(None, description="Monto máximo"),
     db: Session = Depends(get_db),
+    tenant=Depends(verify_tenant_api_key),
 ):
     try:
         kpis = calculate_kpis(
@@ -63,6 +56,7 @@ def get_inventory_dashboard(
     product: str | None = Query(None, description="Filtrar por producto"),
     channel: str | None = Query(None, description="Filtrar por canal"),
     safety_days: int = Query(7, ge=1, le=90, description="Días de seguridad para reorden"),
+    tenant=Depends(verify_tenant_api_key),
 ):
     dashboard = build_inventory_dashboard_payload(
         tenant_code,
@@ -83,6 +77,7 @@ def get_causal_dashboard(
     safety_days: int = Query(7, ge=1, le=90),
     sentiment_days: int = Query(60, ge=7, le=180),
     db: Session = Depends(get_db),
+    tenant=Depends(verify_tenant_api_key),
 ):
     kpis = calculate_kpis(tenant_code, start=start, end=end, db=db)
     sentiment = get_sentiment_summary(tenant_code, days=sentiment_days)
@@ -99,7 +94,7 @@ def get_causal_dashboard(
 
 
 @router.websocket("/ws/metrics/{tenant_code}")
-async def ws_metrics(websocket: WebSocket, tenant_code: str):
+async def ws_metrics(websocket: WebSocket, tenant_code: str, tenant=Depends(verify_tenant_api_key)):
     """WebSocket para métricas en tiempo real."""
     await websocket.accept()
     data = cache_get(f"metrics:{tenant_code}")

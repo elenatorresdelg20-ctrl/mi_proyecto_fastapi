@@ -1,32 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 import hashlib
-from typing import Any
 
+from app.dependencies.tenant import get_db, verify_tenant_api_key
 from app.schemas.explain import ExplainRequest, ExplainResponse
 from app.services.ai_client import AIClient, cache_get, cache_set
 from app.core.rate_limiter import require_rate_allowed
-from app.core.db import SessionLocal
-from app.models.models import Tenant
 
 router = APIRouter()
 ai_client = AIClient()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.post("/explain/{tenant_code}", response_model=ExplainResponse)
-async def explain_data(tenant_code: str, payload: ExplainRequest, request: Request, db: Session = Depends(get_db)):
-    tenant = db.query(Tenant).filter(Tenant.code == tenant_code).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant no encontrado")
-
+async def explain_data(
+    tenant_code: str,
+    payload: ExplainRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant=Depends(verify_tenant_api_key),
+):
     # Rate limit per tenant + client IP
     client_ip = request.client.host if request.client else "unknown"
     require_rate_allowed(tenant_code, client_ip)
@@ -49,7 +41,7 @@ async def explain_data(tenant_code: str, payload: ExplainRequest, request: Reque
     ai_res = await ai_client.explain(prompt, max_tokens=250)
 
     if not ai_res.get("text") or ai_res.get("confidence", 0) < 0.5:
-        resumen = f"Ventas totales: {payload.kpis.get('ventas_actuales', 'N/A')}, transacciones: {payload.kpis.get('transacciones_actuales', 'N/A')}."
+        resumen = f"Ventas totales: {payload.kpis.get('ventas_actuales', 'N/A')}, transacciones: {payload.kpis.get('transacciones_actuales', 'N/A')}.""
         causa = "Se detectó una variación en los principales productos; revisar promociones y stock."
         recomendacion = "Revisar top 5 productos y ajustar inventario/promociones."
         meta = {"model": "fallback", "latency": ai_res.get("latency", 0.0), "cost_estimate": ai_res.get("cost_estimate", 0.0)}
