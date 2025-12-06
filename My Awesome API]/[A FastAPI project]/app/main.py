@@ -1,6 +1,8 @@
-import logging
 import asyncio
-from fastapi import FastAPI
+import logging
+import time
+
+from fastapi import FastAPI, Request
 
 from .core.db import create_tables
 from .core.settings import AI_PROVIDER
@@ -12,6 +14,24 @@ app = FastAPI(title="SaaS Reporting AI - Modular")
 
 # Global HF pipeline placeholder
 HF_LOCAL_PIPELINE = None
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+
+    tenant_code = getattr(request.state, "tenant_code", None) or (request.scope.get("path_params") or {}).get("tenant_code")
+    logger.info(
+        "HTTP %s %s tenant=%s status=%s duration_ms=%.2f",
+        request.method,
+        request.url.path,
+        tenant_code or "-",
+        response.status_code,
+        duration_ms,
+    )
+    return response
 
 
 @app.on_event("startup")

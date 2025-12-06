@@ -1,11 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean
-from app.core.database import Base
+"""Tenant model re-exported from the consolidated models module.
 
-class Tenant(Base):
-    __tablename__ = "tenants"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    code = Column(String, unique=True, index=True, nullable=False)
-    is_active = Column(Boolean, default=True)
-    logo_url = Column(String, nullable=True)
-    primary_color = Column(String, nullable=True)
+This keeps backward compatibility for legacy imports while ensuring all
+entities share the same SQLAlchemy Base and metadata.
+"""
+from app.models.models import Tenant
+
+__all__ = ["Tenant"]

@@ -23,5 +23,9 @@ AI_TIMEOUT = float(os.getenv("AI_TIMEOUT", "8"))
 AI_MAX_CONCURRENCY = int(os.getenv("AI_MAX_CONCURRENCY", "4"))
 COST_PER_1K_TOKENS = float(os.getenv("COST_PER_1K_TOKENS", "0.4"))
 
+# Integrations
+INTEGRATION_TIMEOUT = float(os.getenv("INTEGRATION_TIMEOUT", "6"))
+INTEGRATION_MAX_RETRIES = int(os.getenv("INTEGRATION_MAX_RETRIES", "2"))
+
 # Other
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))

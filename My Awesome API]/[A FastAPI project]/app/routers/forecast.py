@@ -1,5 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+
+from app.dependencies.tenant import get_db, verify_tenant_api_key
 from app.services.forecast_service import get_forecast_data
 from app.schemas.forecast import ForecastOut, ForecastMetadata
 
@@ -10,7 +13,9 @@ router = APIRouter()
 def get_forecast(
     tenant_code: str,
     start: str = Query(None, description="Fecha inicio (YYYY-MM-DD)"),
-    end: str = Query(None, description="Fecha fin (YYYY-MM-DD)")
+    end: str = Query(None, description="Fecha fin (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    tenant=Depends(verify_tenant_api_key),
 ):
     """
     Obtiene pronóstico de ventas inteligente con análisis detallado.
@@ -43,7 +48,7 @@ def get_forecast(
         end = (datetime.now().date() + timedelta(days=30)).isoformat()
     
     try:
-        result = get_forecast_data(tenant_code, start, end)
+        result = get_forecast_data(tenant_code, start, end, db=db)
         
         # Calcular metadata adicional si hay pronósticos
         if result.forecast:

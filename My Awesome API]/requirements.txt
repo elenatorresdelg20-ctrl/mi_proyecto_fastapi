@@ -3,7 +3,7 @@ annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.0
 bcrypt==5.0.0
-certifi==2025.11.12
+certifi==2024.8.30
 cffi==2.0.0
 charset-normalizer==3.4.4
 click==8.3.1
@@ -19,8 +19,7 @@ joblib==1.5.2
 loguru==0.7.3
 Mako==1.3.10
 MarkupSafe==3.0.3
-# Editable install with no version control (my_awesome_api==0.0.0)
--e /Users/elena/mi_proyecto_fastapi/My Awesome API]/[A FastAPI project]
+# Local package can be installed with `pip install './[A FastAPI project]'` when needed
 numpy==2.3.5
 packaging==25.0
 pandas==2.3.3
@@ -34,7 +33,7 @@ pytest==9.0.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 python-multipart==0.0.20
-pytz==2025.2
+pytz==2024.1
 PyYAML==6.0.3
 requests==2.32.5
 scikit-learn==1.7.2
@@ -45,7 +44,7 @@ starlette==0.50.0
 threadpoolctl==3.6.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
-tzdata==2025.2
+tzdata==2024.2
 urllib3==2.5.0
 uvicorn==0.38.0
 uvloop==0.22.1
