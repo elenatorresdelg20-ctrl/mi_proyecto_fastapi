@@ -12,34 +12,47 @@ Métodos:
 - Análisis de palabras clave por sentimiento
 """
 
-from typing import List, Dict, Tuple
+import re
 from datetime import datetime, timedelta
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-from app.core.db import SessionLocal
-from app.models.models import Sale, Tenant
+from typing import Dict, List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+    from app.models.models import Sale, Tenant
 
 
 # Léxico de palabras positivas con pesos
 POSITIVE_WORDS = {
-    "excelente": 5, "fantástico": 5, "increíble": 5, "perfecto": 5,
-    "genial": 4, "bueno": 3, "bien": 3, "buena": 3, "agradable": 3,
-    "satisfecho": 4, "feliz": 5, "amor": 5, "adorable": 5, "impresionante": 5,
-    "recomiendo": 4, "recomendable": 4, "rápido": 3, "eficiente": 3,
+    "excelente": 5, "fantástico": 5, "fantastico": 5, "increíble": 5, "increible": 5, "perfecto": 5,
+    "genial": 4, "bueno": 3, "buen": 3, "bien": 3, "buena": 3, "agradable": 3,
+    "satisfecho": 4, "satisfecha": 4, "feliz": 5, "amor": 5, "adorable": 5, "impresionante": 5,
+    "recomiendo": 4, "recomendable": 4, "rápido": 3, "rapido": 3, "eficiente": 3,
     "calidad": 3, "confiable": 4, "lindo": 3, "hermoso": 4, "espectacular": 5,
-    "profesional": 3, "útil": 3, "práctico": 3, "fácil": 3, "intuitivo": 3
+    "profesional": 3, "útil": 3, "util": 3, "práctico": 3, "practico": 3, "fácil": 3, "facil": 3, "intuitivo": 3,
+    "mejor": 3, "increible": 5, "solido": 3, "agradable": 3, "eficaz": 3
 }
 
 # Léxico de palabras negativas con pesos
 NEGATIVE_WORDS = {
     "terrible": -5, "horrible": -5, "odio": -5, "peor": -5,
     "malo": -3, "mal": -3, "mala": -3, "desagradable": -3,
-    "decepcionante": -4, "decepcionado": -4, "frustrado": -4, "enojado": -4,
+    "decepcionante": -4, "decepcionado": -4, "decepcionada": -4, "frustrado": -4, "frustrada": -4, "enojado": -4,
     "problema": -3, "defecto": -3, "error": -3, "lento": -3,
-    "caro": -2, "inútil": -4, "complicado": -3, "confuso": -3,
+    "caro": -2, "inútil": -4, "inutil": -4, "complicado": -3, "confuso": -3,
     "no recomiendo": -4, "no sirve": -4, "roto": -4, "defectuoso": -4,
-    "incómodo": -2, "feo": -2, "desastre": -5, "pestilencia": -5
+    "incómodo": -2, "incomodo": -2, "feo": -2, "desastre": -5, "pestilencia": -5, "cancelado": -3,
+    "mala experiencia": -4, "incumplimiento": -4
 }
+
+STOPWORDS = {
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al", "y", "o", "a", "en",
+    "que", "por", "para", "con", "se", "su", "sus", "es", "son", "era", "fue", "muy", "tan", "esto",
+    "esta", "este", "estas", "estos", "lo", "como", "sin", "si", "pero", "aunque", "ya", "más", "mas",
+    "menos", "me", "mi", "tu", "te", "yo", "nos", "ustedes", "ellos", "ellas", "él", "ella"
+}
+
+NEGATIONS = {"no", "nunca", "jamás", "jamas", "sin"}
+INTENSIFIERS = {"muy": 1.3, "super": 1.5, "demasiado": 1.4, "tan": 1.2}
 
 # Mapeo de emociones
 EMOTIONS = {
@@ -62,36 +75,66 @@ class SentimentAnalyzer:
         """Extrae palabras de un texto."""
         if not text:
             return []
-        text = text.lower().strip()
-        return [w.strip('.,!?;:"\'-') for w in text.split() if len(w) > 2]
+        normalized = text.lower().strip()
+        tokens = re.findall(r"[\wáéíóúñü]+", normalized)
+        return [w for w in tokens if len(w) > 2 and w not in STOPWORDS]
 
     @staticmethod
-    def _calculate_polarity(text: str) -> Tuple[float, str]:
-        """Calcula polaridad del texto (-1 a 1)."""
+    def _calculate_polarity(text: str) -> Tuple[float, str, Dict[str, List[str]]]:
+        """Calcula polaridad del texto (-1 a 1) con manejo de negaciones e intensificadores."""
         words = SentimentAnalyzer._extract_words(text)
         if not words:
-            return 0.0, "neutral"
+            return 0.0, "neutral", {"positives": [], "negatives": []}
 
-        score = 0
+        score = 0.0
+        hits: List[Tuple[str, float]] = []
+        negate_span = 0
+        boost = 1.0
+
         for word in words:
-            if word in POSITIVE_WORDS:
-                score += POSITIVE_WORDS[word]
-            elif word in NEGATIVE_WORDS:
-                score += NEGATIVE_WORDS[word]
+            if word in NEGATIONS:
+                negate_span = 2
+                continue
 
-        # Normalizar a escala -1 a 1
-        max_score = len(words) * 5
+            if word in INTENSIFIERS:
+                boost = max(boost, INTENSIFIERS[word])
+                continue
+
+            base = 0.0
+            if word in POSITIVE_WORDS:
+                base = POSITIVE_WORDS[word]
+            elif word in NEGATIVE_WORDS:
+                base = NEGATIVE_WORDS[word]
+
+            if base != 0:
+                weighted = base * boost
+                if negate_span:
+                    weighted = -base * boost if base > 0 else base * 0.5 * boost
+                    negate_span -= 1
+                score += weighted
+                hits.append((word, weighted))
+                boost = 1.0
+            elif negate_span:
+                negate_span -= 1
+
+        if not hits:
+            return 0.0, "neutral", {"positives": [], "negatives": []}
+
+        max_score = len(hits) * 5
         polarity = score / max_score if max_score > 0 else 0
         polarity = max(-1.0, min(1.0, polarity))
 
-        if polarity > 0.2:
+        if polarity > 0.1:
             label = "positivo"
-        elif polarity < -0.2:
+        elif polarity <= -0.1:
             label = "negativo"
         else:
             label = "neutral"
 
-        return polarity, label
+        positives = [w for w, val in hits if val > 0]
+        negatives = [w for w, val in hits if val < 0]
+
+        return polarity, label, {"positives": positives, "negatives": negatives}
 
     @staticmethod
     def _detect_emotions(text: str) -> Dict[str, float]:
@@ -112,34 +155,43 @@ class SentimentAnalyzer:
         return emotions
 
     @staticmethod
-    def _calculate_intensity(text: str) -> float:
-        """Calcula intensidad del sentimiento (0-100)."""
+    def _calculate_intensity(text: str, polarity: float) -> float:
+        """Calcula intensidad del sentimiento (0-100) considerando énfasis y polaridad."""
         words = SentimentAnalyzer._extract_words(text)
         if not words:
             return 0.0
 
-        intensity = 0
+        emphasis_bonus = min(text.count("!"), 3) * 5
+        uppercase_bonus = 5 if any(tok.isupper() and len(tok) > 3 for tok in text.split()) else 0
+
+        intensity = 0.0
         for word in words:
             if word in POSITIVE_WORDS:
                 intensity += abs(POSITIVE_WORDS[word])
             elif word in NEGATIVE_WORDS:
                 intensity += abs(NEGATIVE_WORDS[word])
 
-        # Escala 0-100
         max_intensity = len(words) * 5
-        intensity = (intensity / max_intensity * 100) if max_intensity > 0 else 0
-        return min(100.0, intensity)
+        lexical_intensity = (intensity / max_intensity * 100) if max_intensity > 0 else 0.0
+        polarity_boost = min(abs(polarity) * 40, 40)
+
+        total_intensity = lexical_intensity + emphasis_bonus + uppercase_bonus + polarity_boost
+        return min(100.0, total_intensity)
 
     @staticmethod
     def analyze(text: str) -> Dict:
         """Análisis completo de un texto."""
-        polarity, polarity_label = SentimentAnalyzer._calculate_polarity(text)
+        polarity, polarity_label, keywords = SentimentAnalyzer._calculate_polarity(text)
         emotions = SentimentAnalyzer._detect_emotions(text)
-        intensity = SentimentAnalyzer._calculate_intensity(text)
+        intensity = SentimentAnalyzer._calculate_intensity(text, polarity)
+
+        coverage = len(keywords["positives"] + keywords["negatives"])
+        confidence = min(1.0, (coverage / max(len(SentimentAnalyzer._extract_words(text)), 1)) + abs(polarity) / 2)
 
         # Ajustar score de satisfacción (0-100)
         satisfaction = ((polarity + 1) / 2) * 100
-        satisfaction = satisfaction * (intensity / 100) if intensity > 0 else 50
+        satisfaction = satisfaction * (0.6 + intensity / 200) if intensity > 0 else 50
+        satisfaction = max(0.0, min(100.0, satisfaction))
 
         return {
             "polarity": round(polarity, 3),
@@ -147,6 +199,8 @@ class SentimentAnalyzer:
             "emotions": {k: round(v, 2) for k, v in emotions.items()},
             "intensity": round(intensity, 2),
             "satisfaction": round(satisfaction, 2),
+            "confidence": round(confidence, 3),
+            "keywords": keywords,
             "main_emotion": max(emotions, key=emotions.get) if emotions else "neutral"
         }
 
@@ -158,6 +212,11 @@ def analyze_feedback(text: str) -> Dict:
 
 def get_sentiment_summary(tenant_code: str, days: int = 90) -> Dict:
     """Obtiene resumen de sentimientos del tenant."""
+    from sqlalchemy import func
+
+    from app.core.db import SessionLocal
+    from app.models.models import Sale, Tenant
+
     db = SessionLocal()
 
     try:
@@ -224,6 +283,9 @@ def get_sentiment_summary(tenant_code: str, days: int = 90) -> Dict:
 
 def get_sentiment_timeline(tenant_code: str, days: int = 30) -> List[Dict]:
     """Obtiene evolución temporal de sentimientos."""
+    from app.core.db import SessionLocal
+    from app.models.models import Sale, Tenant
+
     db = SessionLocal()
 
     try:
@@ -274,6 +336,9 @@ def get_sentiment_timeline(tenant_code: str, days: int = 30) -> List[Dict]:
 
 def get_sentiment_by_product(tenant_code: str, days: int = 90) -> Dict:
     """Análisis de sentimientos por producto."""
+    from app.core.db import SessionLocal
+    from app.models.models import Sale, Tenant
+
     db = SessionLocal()
 
     try:
