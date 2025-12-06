@@ -1,6 +1,10 @@
 import zipfile
 
-from app.services.report_service import generate_calculated_excel_report, generate_excel_report
+from app.services.report_service import (
+    generate_calculated_excel_report,
+    generate_excel_report,
+    generate_pptx_report,
+)
 
 
 def _payload():
@@ -20,6 +24,10 @@ def _payload():
             ],
             "movements": [{"date": "2025-05-01", "units": 3, "revenue": 240.0}],
         },
+        "forecast": [
+            {"date": "2025-05-02", "expected_amount": 300.0},
+        ],
+        "meta": {"trend": "up", "confidence": 0.92},
     }
 
 
@@ -40,3 +48,19 @@ def test_calculated_excel_has_formulas():
         calc_sheet = zf.read("xl/worksheets/sheet5.xml").decode()
         assert "COUNTIF(Inventario!E2:E200" in calc_sheet
         assert "SUM(Movimientos!C2:C200" in calc_sheet
+
+
+def test_pptx_contains_dynamic_bullets():
+    ppt = generate_pptx_report("tenant-x", _payload())
+
+    with zipfile.ZipFile(ppt) as zf:
+        assert "ppt/slides/slide1.xml" in zf.namelist()
+        assert "ppt/slides/slide2.xml" in zf.namelist()
+
+        slide1 = zf.read("ppt/slides/slide1.xml").decode()
+        slide2 = zf.read("ppt/slides/slide2.xml").decode()
+
+        assert "Reporte tenant-x" in slide1
+        assert "Ventas: 1000" in slide1
+        assert "Inventario & Forecast" in slide2
+        assert "Tendencia: up" in slide2

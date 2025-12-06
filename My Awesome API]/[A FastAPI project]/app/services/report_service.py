@@ -117,8 +117,146 @@ def _package_excel(sheets: Dict[str, str]) -> BytesIO:
 
 
 def generate_pptx_report(tenant_code: str, payload):
-    """PPTX placeholder: mantiene compatibilidad devolviendo bytes válidos."""
-    return BytesIO(b"PPTX content coming from professional SaaS builder")
+    """Genera un PPTX ligero con resúmenes de KPI e inventario."""
+
+    def _escape_xml(text: str) -> str:
+        return (
+            str(text)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+    def _build_slide(title: str, bullets: List[str]) -> str:
+        bullet_xml = "".join(
+            f"<a:p><a:r><a:t>{_escape_xml(b)}</a:t></a:r></a:p>" for b in bullets
+        )
+        return (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" "
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" "
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+            "<p:cSld><p:spTree>"
+            "<p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>"
+            "<p:grpSpPr/>"
+            "<p:sp>"
+            "<p:nvSpPr><p:cNvPr id=\"2\" name=\"Title 1\"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>"
+            "<p:spPr/>"
+            "<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>"
+            f"{_escape_xml(title)}"
+            "</a:t></a:r></a:p></p:txBody>"
+            "</p:sp>"
+            "<p:sp>"
+            "<p:nvSpPr><p:cNvPr id=\"3\" name=\"Content Placeholder 2\"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>"
+            "<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>"
+            f"{bullet_xml if bullet_xml else '<a:p><a:r><a:t>Sin datos</a:t></a:r></a:p>'}"
+            "</p:txBody></p:sp>"
+            "</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>"
+        )
+
+    def _package_pptx(slides: List[str]) -> BytesIO:
+        import zipfile
+
+        mem = BytesIO()
+        with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # Content types
+            overrides = [
+                '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>',
+            ]
+            overrides.extend(
+                [
+                    f'<Override PartName="/ppt/slides/slide{idx}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'
+                    for idx in range(1, len(slides) + 1)
+                ]
+            )
+            content_types = (
+                "<?xml version='1.0' encoding='UTF-8'?>"
+                "<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'>"
+                "<Default Extension='rels' ContentType='application/vnd.openxmlformats-package.relationships+xml'/>"
+                "<Default Extension='xml' ContentType='application/xml'/>"
+                f"{''.join(overrides)}"
+                "</Types>"
+            )
+            zf.writestr("[Content_Types].xml", content_types)
+
+            # Root rels
+            zf.writestr(
+                "_rels/.rels",
+                """<?xml version='1.0' encoding='UTF-8'?>
+<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'>
+  <Relationship Id='rId1' Type='http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument' Target='ppt/presentation.xml'/>
+</Relationships>""",
+            )
+
+            # Presentation relationships
+            slide_rels = "".join(
+                [
+                    f"<Relationship Id='rId{idx}' Type='http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide' Target='slides/slide{idx}.xml'/>"
+                    for idx in range(1, len(slides) + 1)
+                ]
+            )
+            zf.writestr(
+                "ppt/_rels/presentation.xml.rels",
+                "<?xml version='1.0' encoding='UTF-8'?>"
+                "<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'>"
+                f"{slide_rels}"
+                "</Relationships>",
+            )
+
+            # Presentation file
+            slide_id_entries = "".join(
+                [f"<p:sldId id='{255 + idx}' r:id='rId{idx}'/>" for idx in range(1, len(slides) + 1)]
+            )
+            zf.writestr(
+                "ppt/presentation.xml",
+                "<?xml version='1.0' encoding='UTF-8'?>"
+                "<p:presentation xmlns:p='http://schemas.openxmlformats.org/presentationml/2006/main' "
+                "xmlns:a='http://schemas.openxmlformats.org/drawingml/2006/main' "
+                "xmlns:r='http://schemas.openxmlformats.org/officeDocument/2006/relationships'>"
+                f"<p:sldIdLst>{slide_id_entries}</p:sldIdLst>"
+                "</p:presentation>",
+            )
+
+            # Slides
+            for idx, slide_xml in enumerate(slides, start=1):
+                zf.writestr(f"ppt/slides/slide{idx}.xml", slide_xml)
+
+        mem.seek(0)
+        return mem
+
+    kpis = payload.get("kpis", {}) if isinstance(payload, dict) else {}
+    inventory = payload.get("inventory", {}) if isinstance(payload, dict) else {}
+    forecast = payload.get("forecast", []) if isinstance(payload, dict) else []
+
+    kpi_bullets = [
+        f"Ventas: {kpis.get('ventas', 0)}",
+        f"Transacciones: {kpis.get('transacciones', 0)}",
+        f"Ticket promedio: {kpis.get('ticket_promedio', 0)}",
+        f"Margen: {kpis.get('margen', 0)}",
+    ]
+
+    inventory_products = inventory.get("products", [])
+    inv_top = inventory_products[0] if inventory_products else {}
+    inv_bullets = [
+        f"Producto líder: {inv_top.get('product', 'N/A')} ({inv_top.get('stock_units', 0)} uds)",
+        f"Cobertura media: {inv_top.get('coverage_days', 0)} días",
+        f"Alertas de reorden: {sum(1 for p in inventory_products if p.get('reorder_alert'))}",
+    ]
+
+    forecast_bullets = []
+    if forecast:
+        expected_window = sum(fp.get("expected_amount", 0) for fp in forecast)
+        forecast_bullets.append(f"Ingresos proyectados: {round(expected_window, 2)}")
+    if payload.get("meta"):
+        meta = payload["meta"]
+        forecast_bullets.append(f"Tendencia: {meta.get('trend')}, confianza: {meta.get('confidence')}")
+
+    slides = [
+        _build_slide(f"Reporte {tenant_code}", kpi_bullets),
+        _build_slide("Inventario & Forecast", inv_bullets + forecast_bullets),
+    ]
+
+    return _package_pptx(slides)
 
 
 def _build_kpi_sheet(payload: Dict[str, Any]) -> str:
